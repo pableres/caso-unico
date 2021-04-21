@@ -1,0 +1,226 @@
+
+#chupito caso único
+
+install.packages("scan")
+library(scan)
+
+exampleAB<-exampleAB
+
+#crear scdf
+
+scdf(values = c(A = 2,2,4,5, B = 8,7,6,9,8,7))
+scdf(values = c(2,2,4,5,8,7,6,9,8,7), B.start = 5)
+scdf(values = c(2,2,4,5,8,7,6,9,8,7), phase.design = c(A = 4, B = 6))
+
+#un poco más difícil
+scdf(
+  values = c(2,2,4,5,  8,7,6,9,8,7,  12,11,13), 
+  mt = c(1,2,3,6,  8,9,11,12,16,18,  27,28,29),
+  phase.design = c(A = 4, B = 6, C = 3)
+)
+
+#unir varios
+
+case1 <- scdf(
+  values = c(A = 5, 7, 10, 5, 12, B = 7, 10, 18, 15, 14, 19), 
+  name = "Juan"
+)
+case2 <- scdf(
+  values = c(A = 3, 4, 3, 5, B = 7, 4, 7, 9, 8, 10, 12), 
+  name = "Teresa"
+)
+case3 <- scdf(
+  values = c(A = 9, 8, 8, 7, 5, 7, B = 6, 14, 15, 12, 16), 
+  name = "Antonia"
+)
+
+mbd <- c(case1, case2, case3)
+
+#representaciones visuales
+
+library(SCVA)
+library(readxl)
+
+#visual analysis.
+
+setwd("C:/Users/pable/Desktop/Escritorio antiguo/Investigación/Tesis María Alexandra/")
+
+pac1 <- read_excel("Resultados FSFI.xlsx", sheet = 4)
+pac1 <-as.data.frame(pac1)
+pac1
+graph.CL("AB", CL =  "mean", data = pac1 ,xlab="FSFI pac  1",
+         ylab="Scores",ylim=c(0,36),legendxy=NULL,labels=c("Pre","Follow up")) 
+
+#visualización con suavizado
+
+Joha_mmd <- smooth_cases(exampleAB$Johanna)
+Joha_mmn <- smooth_cases(exampleAB$Johanna, FUN = "movingMean")
+Joha_lre <- smooth_cases(exampleAB$Johanna, FUN = "localRegression")
+new_study <- c(exampleAB$Johanna, Joha_mmd, Joha_mmn, Joha_lre)
+names(new_study) <- c("Original", "Moving Median", "Moving Mean", "Local Regression")
+plot(new_study, style = "grid2")
+
+#visualización con paquete scan:
+
+newstyle <- style_plot(fill = "grey95", grid = "lightblue", pch = 16)
+plot(exampleAB, style = newstyle)
+
+
+#o en ggplot2
+
+library(ggplot2)
+
+p<-ggplot()+
+  geom_line(aes(y = FSFI, x = sem),
+            data = pac1, stat="identity")
+p
+
+#o paquete scdhlm
+library(nlme)
+library(scdhlm)
+
+data(AlberMorgan)
+dat <- AlberMorgan
+dat
+
+graph_SCD(case = case, phase = condition, session = session, outcome = outcome, design = "AB", data = dat) +
+  stat_smooth(method = "lm",formula = y ~ x + I(x^2), size = 1)
+
+#inicio de estimadores
+
+autocorr(exampleAB)
+trend(exampleAB[1])
+
+#casos atípicos
+outlier(exampleABC_outlier, criteria = c("MAD", 3.5))
+
+res <- outlier(exampleABC_outlier, criteria = c("MAD", 3.5))
+plot(exampleABC_outlier, marks = res, style = "annotate", ylim = c(40,160))
+
+
+#Percentage non-overlapping data (PND)
+pnd(exampleAB, decreasing = FALSE, phases = c("A", "B"))
+
+#Percentage exceeding the median (PEM)
+pem(exampleAB, decreasing = FALSE, binom.test = TRUE, chi.test = TRUE, FUN = median, phases = c(1, 2))
+
+#Percentage exceeding the regression trend (PET)
+pet(exampleAB, ci = 0.95, decreasing = FALSE, phases = c(1, 2))
+
+#Percentage of all non-overlapping data (PAND)
+pand(exampleAB, decreasing = FALSE, correction = TRUE, phases = c(1, 2))
+
+#Nonoverlap of all pairs (NAP) is equivalent to the the U-test and Wilcox rank sum test
+nap(exampleAB, decreasing = FALSE, phases = c(1, 2))
+
+#Tau-U
+tau_u(exampleAB, tau_method = "b", method = "complete", phases = c(1, 2), fisher = TRUE, continuity_correction = FALSE)
+
+#Reliable change index
+rci(exampleAB$Johanna, rel = 0.8, graph = TRUE)
+
+#Regression analyzes to a single-case dataset
+plm(exampleAB$Johanna)
+
+#tamaño de efecto
+#más detalles https://cran.r-project.org/web/packages/scdhlm/vignettes/Estimating-effect-sizes.html
+
+#effect_size_ABk (diseño balanceado y buen numero observaciones)
+
+data(Lambert)
+View(Lambert)
+
+Lambert_ES <- effect_size_ABk(outcome = outcome, treatment = treatment, 
+                              id = case, phase = phase, time = time, 
+                              data = Lambert)
+
+print(Lambert_ES, 2)
+summary(Lambert_ES)
+
+# effect_size_MB
+
+data(Saddler)
+View(Saddler)
+
+quality_ES <- effect_size_MB(outcome, treatment, case, time, 
+                             data = subset(Saddler, measure=="writing quality"))
+
+quality_ES$phi
+unlist(quality_ES)
+
+#otra forma de hacerlo
+#primero hierarchical model with an AR(1) within-case error structure
+
+quality_RML <- lme(fixed = outcome ~ treatment, 
+                   random = ~ 1 | case, 
+                   correlation = corAR1(0, ~ time | case), 
+                   data = subset(Saddler, measure=="writing quality"))
+summary(quality_RML)
+
+#The summary of the fitted model displays estimates of the component 
+#parameters, including the within-case and between-case
+#standard deviations,auto-correlation, 
+#and (unstandardized) treatment effect estimate.
+
+#luego
+#to combine these estimated components into an effect size estimate using the g_mlm function.
+#aquí lo dificil es elegir el p_const y el r_const
+#para saber cómo ver: Pustejovsky, Hedges, and Shadish (2014).
+
+quality_ES_RML <- g_mlm(quality_RML, p_const = c(0,1), 
+                        r_const = c(1,0,1), returnModel = TRUE)
+summary(quality_ES_RML)
+
+#si comparamos los dos métodos
+#este nos da el BC-SMD estimate, seguramente el estimador más robusto.
+#es decir... Standardized mean differences (SMD)
+
+data.frame(
+  HPS = with(quality_ES, c(SMD = delta_hat, SE = sqrt(V_delta_hat), 
+                             phi = phi, rho = rho, nu = nu)),
+  RML = with(quality_ES_RML, c(g_AB, SE_g_AB, theta$cor_params, 
+                             theta$Tau$case / (theta$Tau$case + theta$sigma_sq), nu))
+)
+
+#todo esto lo hace un shiny ;)
+# https://jepusto.shinyapps.io/scdhlm/
+
+#por último:
+ 
+#análisis bayesiano 
+#de: 
+#A Tutorial on Computing Bayes Factors for Single-Subject Designs
+
+devtools::install_github("richarddmorey/BayesSingleSub")
+#requiere  Rtools actualizado (https://cran.rstudio.com/bin/windows/Rtools/)
+install.packages("BayesSingleSub", repos="http://R-Forge.R-project.org")
+library(BayesSingleSub)
+
+pacbayes1<-read_excel("DFbayes.xlsx", sheet = 1)
+pacbayes1
+
+#Extracting variable we are interested in working with. In this case the PSWQ#
+names(pacbayes1)
+pacbayes1$Ansiedad
+
+#Creating two groups."ypre" is the baseline data and "ypost" is the post treatment data. 
+
+ansiedadpre<-pacbayes1$Ansiedad[1:4]
+ansiedadpre
+ansiedadpost<-pacbayes1$Ansiedad[13:16]
+ansiedadpost
+
+#Computing ttest.Gibbs.AR. 
+#Note 4: The r scale value was set to 1. Don´t forget to replace r.scale argument´s value for 0.5 and 2 to conduct the sensitivity analysis
+#Note 5: When you are computing ttest.Gibss.AR for variable that must increase (for improvent), you have to replace "leftSided" argument´s value by "FALSE" because scores on this instrument are expected to increase after the intervention#
+
+output.JZS.AR.p1ans<-ttest.Gibbs.AR(ansiedadpre,ansiedadpost,iterations=10000,return.chains=TRUE, r.scale = 1.0, alphaTheta = 1, betaTheta = 5, 
+                                    leftSided = TRUE, return.onesided = TRUE)
+
+#Extracting "chains" variable ##
+head(output.JZS.AR.p1ans$chains)
+summary(output.JZS.AR.p1ans$chains)
+
+#Computing Bayes Factor Leftside.
+BF.L.p1ans=exp(output.JZS.AR.p1ans$logbfOnesided)
+BF.L.p1ans
